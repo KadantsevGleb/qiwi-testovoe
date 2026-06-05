@@ -1,0 +1,269 @@
+{
+	"info": {
+		"_postman_id": "b0c1d2e3-f4a5-4b6c-7d8e-9f0a1b2c3d4e",
+		"name": "QIWI API Tests",
+		"description": "Коллекция для тестового задания по проверке QIWI Wallet API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Проверка доступности сервиса",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Статус ответа 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Валидация контракта: данные содержат массив транзакций\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('data');",
+							"    pm.expect(jsonData.data).to.be.an('array');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/payment-history/v2/persons/{{wallet}}/payments?rows=10",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"payment-history",
+						"v2",
+						"persons",
+						"{{wallet}}",
+						"payments"
+					],
+					"query": [
+						{
+							"key": "rows",
+							"value": "10"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "2. Проверка баланса (> 0)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Статус ответа 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Баланс рублевого кошелька строго больше 0\", function () {",
+							"    var accounts = pm.response.json();",
+							"    var rubAccount = accounts.find(acc => acc.alias === \"qw_wallet_rub\");",
+							"    ",
+							"    pm.expect(rubAccount).to.not.be.undefined;",
+							"    ",
+							"    var balanceAmount = parseFloat(rubAccount.balance.amount);",
+							"    pm.expect(balanceAmount).to.be.above(0);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/funding-sources/v2/persons/{{wallet}}/accounts",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"funding-sources",
+						"v2",
+						"persons",
+						"{{wallet}}",
+						"accounts"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "3. Создание платежа (1 рубль)",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"var uuid = pm.variables.replaceIn('{{$guid}}');",
+							"pm.collectionVariables.set(\"transactionId\", uuid);"
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Платеж успешно создан\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"ID транзакции в ответе совпадает с отправленным\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.id).to.eql(pm.collectionVariables.get(\"transactionId\"));",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"id\": \"{{transactionId}}\",\n    \"sum\": {\n        \"amount\": 1.00,\n        \"currency\": \"643\"\n    },\n    \"paymentMethod\": {\n        \"type\": \"Account\",\n        \"accountId\": \"643\"\n    },\n    \"fields\": {\n        \"account\": \"{{targetAccount}}\"\n    }\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/sinap/api/v2/terms/{{providerId}}/payments",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"sinap",
+						"v2",
+						"terms",
+						"{{providerId}}",
+						"payments"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "4. Проверка исполнения платежа",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Статус ответа 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Платеж находится в успешном статусе\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    var allowedStatuses = [\"SUCCESS\", \"PROCESSING\"];",
+							"    pm.expect(allowedStatuses).to.include(jsonData.status);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/payment-history/v2/transactions/{{transactionId}}?type=OUT",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"payment-history",
+						"v2",
+						"transactions",
+						"{{transactionId}}"
+					],
+					"query": [
+						{
+							"key": "type",
+							"value": "OUT"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://edge.qiwi.com",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "place_your_qiwi_token_here",
+			"type": "string"
+		},
+		{
+			"key": "wallet",
+			"value": "79991112233",
+			"type": "string"
+		},
+		{
+			"key": "providerId",
+			"value": "99",
+			"type": "string"
+		},
+		{
+			"key": "transactionId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "targetAccount",
+			"value": "79991112233",
+			"type": "string"
+		}
+	]
+}
